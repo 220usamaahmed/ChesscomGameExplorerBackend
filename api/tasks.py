@@ -1,6 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 
-from celery import shared_task
+from celery import shared_task, states
+from celery.exceptions import Ignore
 from celery_progress.backend import ProgressRecorder
 
 import urllib.request
@@ -21,8 +22,12 @@ def get_archive_links(username):
             data = json.loads(url.read().decode())
             return data["archives"]
     except urllib.error.HTTPError as exception:
-        # TODO: Error logging
-        print(exception)
+        if exception.code == 404:
+            raise Exception("This username was not found on chess.com")
+        else:
+            raise Exception("Something went wrong, plese try later")
+    except Exception as exception:
+        raise Exception("Something went wrong, plese try later")
 
 
 def download_games(archive_links):
@@ -33,9 +38,8 @@ def download_games(archive_links):
             with urllib.request.urlopen(archive_link) as url:
                 data = json.loads(url.read().decode())
             yield period, data['games']
-    except urllib.error.HTTPError as exception:
-            # TODO: Error logging
-            print(exception)
+    except Exception as exception:
+        raise Exception("Something went wrong, plese try later")
 
 
 def update_game_tree(tree, game, result):
@@ -64,33 +68,39 @@ def generate_game_trees(self, username):
 
     tree_white = {'next_moves': {}}
     tree_black = {'next_moves': {}}
-    game_trees = { 'white': tree_white, 'black': tree_black }
+    result = {
+        'white': tree_white,
+        'black': tree_black,
+        'error': None
+    }
 
-    archive_links = get_archive_links(username)
-    for i, (period, games_data) in enumerate(download_games(archive_links)):
-        for game_data in games_data:
-            game = chess.pgn.read_game(io.StringIO(game_data['pgn']))
-            if game_data['white']['username'].lower() == username:
-                if game_data['white']['result'] == 'win':
-                    # I won as white
-                    update_game_tree(tree_white, game, +1)
-                elif game_data['black']['result'] == 'win':
-                    # I lost as white
-                    update_game_tree(tree_white, game, -1)
+    try:
+        archive_links = get_archive_links(username)
+        for i, (period, games_data) in enumerate(download_games(archive_links)):
+            for game_data in games_data:
+                game = chess.pgn.read_game(io.StringIO(game_data['pgn']))
+                if game_data['white']['username'].lower() == username:
+                    if game_data['white']['result'] == 'win':
+                        # I won as white
+                        update_game_tree(tree_white, game, +1)
+                    elif game_data['black']['result'] == 'win':
+                        # I lost as white
+                        update_game_tree(tree_white, game, -1)
+                    else:
+                        # I drew as white
+                        update_game_tree(tree_white, game, 0)
                 else:
-                    # I drew as white
-                    update_game_tree(tree_white, game, 0)
-            else:
-                if game_data['black']['result'] == 'win':
-                    # I won as black
-                    update_game_tree(tree_black, game, +1)
-                elif game_data['white']['result'] == 'win':
-                    # I lost as black
-                    update_game_tree(tree_black, game, -1)
-                else:
-                    # I drew as black
-                    update_game_tree(tree_black, game, 0)
-
-        progress_recorder.set_progress(i + 1, len(archive_links), description=f"Downloading games from {period}")
-    
-    return game_trees
+                    if game_data['black']['result'] == 'win':
+                        # I won as black
+                        update_game_tree(tree_black, game, +1)
+                    elif game_data['white']['result'] == 'win':
+                        # I lost as black
+                        update_game_tree(tree_black, game, -1)
+                    else:
+                        # I drew as black
+                        update_game_tree(tree_black, game, 0)
+            progress_recorder.set_progress(i + 1, len(archive_links), description=f"Downloading games from {period}")
+        return result
+    except Exception as exception:
+        result['error'] = str(exception)
+        return result
