@@ -1,9 +1,12 @@
-from django.http import HttpResponse
+from django.http import JsonResponse
 from .tasks import generate_game_trees
+from celery_progress.views import get_progress
 
 
 def get_game_trees(request, username):
+    task_id = generate_game_trees.delay(username).id
+    return JsonResponse({ 'task_id': task_id })
 
-    task = generate_game_trees.delay(username)
 
-    return HttpResponse(f"<a href='http://127.0.0.1:8000/api/progress/{task.id}'>Progress link: {task.id}</a>")
+def get_task_progress(request, task_id):
+    return get_progress(request, task_id=task_id)

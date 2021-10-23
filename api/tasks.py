@@ -10,7 +10,7 @@ import io
 import chess.pgn
 
 
-MAX_DEPTH = 8
+MAX_DEPTH = 4
 
 
 def get_archive_links(username):

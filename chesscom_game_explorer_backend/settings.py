@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     
     'api',
 
+    'corsheaders',
     'django_celery_results',
     'celery_progress',
 ]
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'chesscom_game_explorer_backend.urls'
@@ -133,3 +135,6 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
+
+# TODO: Handle CORS
+CORS_ORIGIN_ALLOW_ALL = True
